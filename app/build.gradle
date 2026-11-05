@@ -1,0 +1,39 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.tango.learning'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.tango.learning'
+        minSdk 26
+        targetSdk 34
+        versionCode (project.findProperty('versionCode') ?: '1') as int
+        versionName (project.findProperty('versionName') ?: '1.0')
+    }
+
+    // Uses the bundled keystore by default. CI can override it with repository secrets
+    // (KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD) -- see README.
+    signingConfigs {
+        release {
+            storeFile file(System.getenv('KEYSTORE_PATH') ?: "$rootDir/keystore/tango.jks")
+            storePassword System.getenv('KEYSTORE_PASSWORD') ?: 'tangolearning'
+            keyAlias System.getenv('KEY_ALIAS') ?: 'tango'
+            keyPassword System.getenv('KEY_PASSWORD') ?: 'tangolearning'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

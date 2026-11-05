@@ -1,0 +1,9 @@
+<resources>
+    <color name="ic_bg">#5558E3</color>
+    <color name="splash">#F4F6FC</color>
+    <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/splash</item>
+        <item name="android:statusBarColor">@color/splash</item>
+        <item name="android:navigationBarColor">@color/splash</item>
+    </style>
+</resources>
