@@ -494,6 +494,8 @@ function checkItem(x,lv,seen){
   if(!x||typeof x!=='object')return{err:'item is not an object'};
   const it=normItem(x);
   if(!it.q)return{err:'question text missing'};
+  if(/[\u0900-\u097F]/.test(it.ex+(it.eg?it.eg.bn:'')+(it.w?it.w.bn:'')))return{err:'explanation written in Hindi, must be Bengali'};
+  if(it.ex&&!/[\u0980-\u09FF]/.test(it.ex))return{err:'explanation must be in Bengali script'};
   if(it.opts.length!==4||it.opts.some(o=>!o))return{err:'needs exactly 4 non-empty options'};
   if(new Set(it.opts).size!==4)return{err:'duplicate options'};
   if(!(it.a>=0&&it.a<4))return{err:'correct answer index missing'};
@@ -546,8 +548,8 @@ function jPrompt(lv,ty,n){
   const tyd={v:'vocabulary usage questions: a sentence with a ＿＿ blank (or a word to be matched to its meaning); the learner chooses the word or meaning that fits',
     k:'kanji reading questions: a short sentence containing a target word written in kanji; the learner chooses the correct kana reading',
     g:'grammar questions: a sentence with a ＿＿ blank; the learner chooses the particle or grammar pattern that completes it'}[ty];
-  return[{role:'system',content:'You are an experienced JLPT question writer. You write original JLPT-style practice questions — never real past-exam questions. Reply with ONLY a JSON array. No markdown fences, no commentary.'},
-    {role:'user',content:'Write '+n+' '+tyd+'.\n'+JProf[lv]+'\nRules:\n- Every kanji and every grammar point in the question text and in all four options must belong to '+lv+' or an easier level.\n- Exactly 4 options per question; exactly 1 correct ("a" = its index, 0-3); distractors plausible for a learner but clearly wrong on careful reading.\n- No two questions may repeat or differ only by a word swap. Write at most '+(n+1)+' items — do not continue past the last one.\n- "ex": ONE short Bangla sentence explaining why the correct answer is right.\n- "eg": one very short example sentence (max 25 Japanese characters) with a short Bangla meaning.\n- "w": the target word as {f: word or kanji, r: kana reading, bn: Bangla meaning}; may be null for grammar items.\n- "q" uses ＿＿ for the blank when the question has one.\nFormat: a JSON array. Each item is exactly {"q":"question text","opts":["A","B","C","D"],"a":0,"ex":"Bangla explanation","eg":{"jp":"example","bn":"Bangla"},"w":{"f":"word","r":"kana","bn":"Bangla"}} — use these exact key names (q, opts, a, ex, eg, w).\nKeep every string SHORT. Output the JSON array and then STOP — no text after the closing bracket.'}];
+  return[{role:'system',content:'You are an experienced JLPT question writer. You write original JLPT-style practice questions — never real past-exam questions. All explanations and meanings must be in Bengali (বাংলা) script, never Hindi or Devanagari. Reply with ONLY a JSON array. No markdown fences, no commentary.'},
+    {role:'user',content:'Write '+n+' '+tyd+'.\n'+JProf[lv]+'\nRules:\n- Every kanji and every grammar point in the question text and in all four options must belong to '+lv+' or an easier level.\n- Exactly 4 options per question; exactly 1 correct ("a" = its index, 0-3); distractors plausible for a learner but clearly wrong on careful reading.\n- No two questions may repeat or differ only by a word swap. Write at most '+(n+1)+' items — do not continue past the last one.\n- "ex": ONE short sentence in Bengali (বাংলা, as written in Bangladesh, Bengali script only - NEVER Hindi, NEVER Devanagari) explaining why the correct answer is right.\n- "eg": one very short example sentence (max 25 Japanese characters) with a short Bangla meaning.\n- "w": the target word as {f: word or kanji, r: kana reading, bn: Bangla meaning}; may be null for grammar items.\n- "q" uses ＿＿ for the blank when the question has one.\nFormat: a JSON array. Each item is exactly {"q":"question text","opts":["A","B","C","D"],"a":0,"ex":"Bangla explanation","eg":{"jp":"example","bn":"Bangla"},"w":{"f":"word","r":"kana","bn":"Bangla"}} — use these exact key names (q, opts, a, ex, eg, w).\nKeep every string SHORT. Output the JSON array and then STOP — no text after the closing bracket.'}];
 }
 async function solveCheck(lv,items){
   const txt=await aiChat([
@@ -558,8 +560,8 @@ async function solveCheck(lv,items){
 }
 async function genAI(lv,ty,n,seen){
   const rej=[];let good=[];let tot=0;
-  const st={kanji:0,kex:[],solve:0,dupe:0,fmt:0};
-  const cat=s=>{if(s.includes('solve check')){st.solve++;return}
+  const st={kanji:0,kex:[],solve:0,dupe:0,fmt:0,lang:0};
+  const cat=s=>{if(s.includes('Hindi')||s.includes('Bengali')){st.lang++;return}if(s.includes('solve check')){st.solve++;return}
     const m=s.match(/outside \w+: ([\u3400-\u9FFF]+)/);
     if(m){st.kanji++;st.kex.push(m[1]);return}
     if(s.includes('duplicate'))st.dupe++;else st.fmt++};
@@ -588,7 +590,7 @@ async function genAI(lv,ty,n,seen){
   if(!good.length){
     let d=[];
     if(st.kanji)d.push(st.kanji+' had kanji beyond '+lv+' (e.g. '+[...new Set(st.kex)].slice(0,4).join(' ')+')');
-    if(st.solve)d.push(st.solve+' failed the independent solve check');
+    if(st.lang)d.push(st.lang+' explanations were not in Bengali');if(st.solve)d.push(st.solve+' failed the independent solve check');
     if(st.dupe)d.push(st.dupe+' were duplicates');
     if(st.fmt)d.push(st.fmt+' were malformed');
     throw new Error('All '+tot+' generated items were rejected: '+(d.join(', ')||'reasons unavailable')+'. Try again; if it keeps happening, this model struggles with '+lv+' — turn Strict off in AI settings or switch models.')};
