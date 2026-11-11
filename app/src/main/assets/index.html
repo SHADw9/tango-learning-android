@@ -490,12 +490,21 @@ const lgAttr=s=>/[\u3040-\u30FF\u3400-\u9FFF\uF900-\uFA6D]/.test(s)?' lang="ja"'
 const aiCfg=()=>!!(P.ai.url&&P.ai.model);
 function pruneShown(){const s=P.jlpt.shown,ks=Object.keys(s);if(ks.length>900){const keep=new Set(ks.slice(-450));for(const k of ks)if(!keep.has(k))delete s[k]}}
 function normItem(x){x=x||{};const _o=x.opts||x.options||x.choices||x.answers||[];const _opts=Array.isArray(_o)?_o:Object.values(_o);let _a=x.a;if(_a==null)_a=x.answer!=null?x.answer:x.correct!=null?x.correct:x.answerIndex!=null?x.answerIndex:x.correctIndex;if(typeof _a==='string'){const t=_a.trim();if(/^[A-Da-d]$/.test(t))_a='abcd'.indexOf(t.toLowerCase());else{const k=_opts.findIndex(o=>String(o).trim()===t);_a=k>=0?k:t===''?NaN:+t}}return{q:String(x.q||x.question||'').trim(),opts:_opts.map(o=>String(o==null?'':o).trim()),a:+_a,ex:String(x.ex||x.explanation||'').trim(),eg:x.eg?{jp:String(x.eg.jp||'').trim(),bn:String(x.eg.bn||'').trim()}:null,w:(x.w&&x.w.f)?{f:String(x.w.f).trim(),r:String(x.w.r||'').trim(),bn:String(x.w.bn||'').trim()}:null}}
+const bnBad=x=>/[\u0900-\u097F]/.test(x.ex+(x.eg?x.eg.bn:'')+(x.w?x.w.bn:''))||!!(x.ex&&!/[\u0980-\u09FF]/.test(x.ex));
+async function fixBengali(items){
+  const payload=items.map((x,i)=>({i:i,q:x.q,answer:x.opts[x.a],ex:x.ex,eg_bn:x.eg?x.eg.bn:'',w_bn:x.w?x.w.bn:''}));
+  const txt=await aiChat([{role:'system',content:'You are a Bengali translator. Rewrite the text fields you are given in Bengali (বাংলা) as used in Bangladesh, Bengali script only. NEVER use Hindi or Devanagari. Keep each field short. Reply ONLY with a JSON array of objects {"i":number,"ex":"","eg_bn":"","w_bn":""} using the same i values.'},{role:'user',content:JSON.stringify(payload)}],{temp:0,max:2000});
+  const arr=parseJSON(txt);
+  arr.forEach(r=>{const x=items[+(r&&r.i)];if(!x)return;
+    if(r.ex)x.ex=String(r.ex).trim();
+    if(x.eg&&r.eg_bn)x.eg.bn=String(r.eg_bn).trim();
+    if(x.w&&r.w_bn)x.w.bn=String(r.w_bn).trim()});
+}
 function checkItem(x,lv,seen){
   if(!x||typeof x!=='object')return{err:'item is not an object'};
   const it=normItem(x);
   if(!it.q)return{err:'question text missing'};
-  if(/[\u0900-\u097F]/.test(it.ex+(it.eg?it.eg.bn:'')+(it.w?it.w.bn:'')))return{err:'explanation written in Hindi, must be Bengali'};
-  if(it.ex&&!/[\u0980-\u09FF]/.test(it.ex))return{err:'explanation must be in Bengali script'};
+  it.fixbn=bnBad(it);
   if(it.opts.length!==4||it.opts.some(o=>!o))return{err:'needs exactly 4 non-empty options'};
   if(new Set(it.opts).size!==4)return{err:'duplicate options'};
   if(!(it.a>=0&&it.a<4))return{err:'correct answer index missing'};
@@ -580,6 +589,10 @@ async function genAI(lv,ty,n,seen){
     tot+=arr.length;
     const cand=[];
     for(const x of arr){const v=checkItem(x,lv,seen);if(v.err){const s=(x&&x.q?'“'+String(x.q).slice(0,24)+'…”: ':'')+v.err;rej.push(s);cat(s)}else cand.push(v.item)}
+    const nb=cand.filter(x=>x.fixbn);
+    if(nb.length){try{await fixBengali(nb)}catch(e){}
+      for(let k=cand.length-1;k>=0;k--){const x=cand[k];if(!x.fixbn)continue;x.fixbn=bnBad(x);
+        if(x.fixbn){const t='“'+String(x.q).slice(0,24)+'…”: explanation written in Hindi, must be Bengali';rej.push(t);cat(t);cand.splice(k,1)}}}
     if(cand.length&&P.ai.strict!==false){
       const sol=await solveCheck(lv,cand);
       cand.forEach((x,i)=>{const s=sol[i];
