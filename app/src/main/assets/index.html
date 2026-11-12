@@ -190,7 +190,7 @@ select{background:var(--sf2);border:1px solid var(--bd);border-radius:12px;paddi
     <button class="ib" id="jai" aria-label="AI connection" aria-haspopup="dialog" title="AI connection">⚙️</button>
   </div>
   <div class="chips" id="jlv"></div>
-  <div class="stats" id="jstats"></div>
+  <div class="stats" id="jstats"></div><div class="jacts" id="jtools"><button class="chip" data-jbackup>⬇ Backup</button><button class="chip" data-jimport>⬆ Restore</button><button class="chip" data-jprogress>📈 Progress</button><button class="chip" data-jmock>⏱ Offline mock</button><button class="chip" data-jsaved>📚 Saved</button><button class="chip" data-jvreview>🔁 Wrong answers</button><input type="file" id="jimportfile" accept="application/json" hidden></div>
   <div class="bar" role="progressbar" aria-label="Set progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="jb"></i></div>
 </section>
 <main id="main"></main>
@@ -227,7 +227,7 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let P={};try{P=JSON.parse(localStorage.getItem('tango_v1'))||{}}catch(e){}
 P.srs=P.srs||{};P.xp=P.xp||0;P.streak=P.streak||0;P.last=P.last||'';P.day=P.day||{d:'',n:0};P.pref=P.pref||{};P.pref.tags=P.pref.tags||{};
-P.jlpt=Object.assign({lv:'N5',ty:'v',n:5,shown:{},rev:[],log:{a:0,ok:0},rep:[]},P.jlpt||{});
+P.jlpt=Object.assign({lv:'N5',ty:'v',n:5,shown:{},rev:[],log:{a:0,ok:0},rep:[],savedSets:[]},P.jlpt||{});P.jlpt.savedSets=P.jlpt.savedSets||[];
 P.ai=P.ai||{url:'',key:'',model:'',strict:true};
 const save=()=>{try{localStorage.setItem('tango_v1',JSON.stringify(P))}catch(e){}};
 const today=()=>new Date().toLocaleDateString('en-CA');
@@ -351,7 +351,7 @@ function render(){
     return;
   }
   const pr=Math.min(100,S.pos/S.q.length*100);
-  let h=`<div class="bar" style="margin-top:12px" role="progressbar" aria-label="Session progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pr)}"><i style="width:${pr}%"></i></div><div class="stage">${cardHTML(it)}</div>`;
+  let h=`${J.mock?`<div class="jnote" style="text-align:center">⏱ Mock test · <b id="jmockclock">${Math.floor(Math.max(0,J.mock.end-Date.now())/60000)}:${String(Math.floor(Math.max(0,J.mock.end-Date.now())/1000)%60).padStart(2,'0')}</b></div>`:''}<div class="bar" style="margin-top:12px" role="progressbar" aria-label="Session progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pr)}"><i style="width:${pr}%"></i></div><div class="stage">${cardHTML(it)}</div>`;
   if(S.mode==='study'){
     h+=S.flip?`<div class="acts"><button class="btn b0" data-r="0">Again<small>1 · soon</small></button><button class="btn b1" data-r="1">Good<small>2 · next day+</small></button><button class="btn b2" data-r="2">Easy<small>3 · longer</small></button></div>`
       :`<div class="acts"><button class="btn show" data-flip>Show answer<small>Space</small></button></div>`;
@@ -484,7 +484,7 @@ const JKL={N5:new Set(),N4:new Set(),N3:new Set(),N2:new Set(),N1:new Set()};
 const JSUP='家私達帰待思開閉降雪風曜夜春夏秋冬映画歌音料堂乳米野菜果飯卵字漢自荷傘黒机窓引押送取遊泳甘辛晩猫起寝勉強椅計鍵仕事問題部屋物動体場所教室試験重近遠暗写真品牛鳥肉茶病元働飛借理旅者方楽明短頭首顔洋服転乗度台号番階話撮質棚箱着答園根段点院工図館軽細太当難静有良悪暑寒涼熱痛誰消説習通運座泊登直払貸銀市町村港客用業主全同意味員種色並星曇族死吸昼焼辞鳴着遅建草石馬虫海森公園';
 DECKS.kanji.items.forEach(i=>{const o=ordLV[i.l];if(o===undefined)return;for(const k in ordLV)if(ordLV[k]>=o)[...String(i.f)].forEach(c=>{if(/[\u3400-\u9FFF]/.test(c))JKL[k].add(c)})});
 for(const k in JKL)[...JSUP].forEach(c=>{if(/[\u3400-\u9FFF]/.test(c))JKL[k].add(c)});
-const J={q:[],pos:0,ans:null,load:false,err:'',step:'',gen:0,view:'set',done:null};
+const J={q:[],pos:0,ans:null,load:false,err:'',step:'',gen:0,view:'set',done:null,savedId:null};
 const qHash=q=>{let h=0;for(const c of String(q))h=(h*31+c.codePointAt(0))|0;return'h'+(h>>>0).toString(36)};
 const lgAttr=s=>/[\u3040-\u30FF\u3400-\u9FFF\uF900-\uFA6D]/.test(s)?' lang="ja"':/[\u0980-\u09FF]/.test(s)?' lang="bn"':'';
 const aiCfg=()=>!!(P.ai.url&&P.ai.model);
@@ -616,7 +616,7 @@ async function jGen(){
       const ix=shuffle([0,1,2,3]);x.opts=ix.map(i=>x.opts[i]);x.a=ix.indexOf(x.a);
       x.d=now;P.jlpt.shown[qHash(x.q)]=(P.jlpt.shown[qHash(x.q)]||0)+1});
     pruneShown();
-    J.q=shuffle(items);J.pos=0;J.ans=null;J.load=false;save();renderJ();
+    J.q=shuffle(items);J.pos=0;J.ans=null;J.load=false;J.savedId='s'+Date.now();P.jlpt.savedSets.unshift({id:J.savedId,lv:P.jlpt.lv,ty:P.jlpt.ty,n:J.q.length,date:Date.now(),items:J.q.map(x=>({...x}))});P.jlpt.savedSets=P.jlpt.savedSets.slice(0,100);save();renderJ();
     const q0=document.querySelector('#main .jqt');if(q0){q0.setAttribute('tabindex','-1');q0.focus({preventScroll:true})}
   }catch(e){if(tok!==J.gen)return;J.load=false;J.err=(e&&e.message)||String(e);renderJ()}
 }
@@ -624,14 +624,14 @@ function jAnswer(k){
   if(J.ans!=null||!J.q[J.pos])return;const it=J.q[J.pos];J.ans=k;
   const ok=k===it.a;
   if(ok){P.jlpt.log.ok++;J.sok=(J.sok||0)+1}
-  P.jlpt.log.a++;
+  P.jlpt.log.a++;P.jlpt.levelStats=P.jlpt.levelStats||{};const ls=P.jlpt.levelStats[P.jlpt.lv]||(P.jlpt.levelStats[P.jlpt.lv]={a:0,ok:0});ls.a++;if(ok)ls.ok++;
   if(!ok)P.jlpt.rev=[{q:it.q,opts:it.opts,a:it.a,ex:it.ex,eg:it.eg,w:it.w,lv:P.jlpt.lv,ty:P.jlpt.ty,d:Date.now()}].concat(P.jlpt.rev).slice(0,100);
   gain(ok?10:2);save();renderJ();
   const nb=document.querySelector('[data-jn]');if(nb)nb.focus({preventScroll:true});
 }
 function jNext(){
   if(J.ans==null)return;J.ans=null;J.pos++;
-  if(J.pos>=J.q.length){J.done={n:J.q.length,ok:J.sok||0,xp:P.xp-(J.xp0||0)};J.view='done';J.q=[];J.pos=0}
+  if(J.pos>=J.q.length){if(J.mockTimer)clearInterval(J.mockTimer);J.mockTimer=null;J.mock=null;J.done={n:J.q.length,ok:J.sok||0,xp:P.xp-(J.xp0||0)};J.view='done';J.q=[];J.pos=0}
   renderJ();
   const q0=document.querySelector('#main .jqt');if(q0){q0.setAttribute('tabindex','-1');q0.focus({preventScroll:true})}
 }
@@ -643,7 +643,9 @@ function jRev(m){
 }
 function jMain(){
   const m=$('#main');const lv=P.jlpt.lv,ty=P.jlpt.ty;
-  if(J.view==='rev')return jRev(m);
+  if(J.view==='rev')return jRev(m);if(J.view==='progress')return jRenderProgress(m);
+  if(J.view==='saved'){const ss=P.jlpt.savedSets||[];m.innerHTML=`<div class="empty" style="text-align:left"><h2 style="text-align:center">📚 Saved question sets · Offline</h2><p>Search and filter your saved sets.</p><input id="jss" placeholder="Search N5, kanji, grammar…" style="width:100%;padding:10px;border-radius:10px"><select id="jfilter" style="margin:8px 0;padding:8px"><option value="all">All levels</option><option>N5</option><option>N4</option><option>N3</option><option>N2</option><option>N1</option></select><div id="jsetlist">${ss.length?ss.map((x,i)=>`<div class="jr" data-setrow data-level="${esc(x.lv)}"><div><b>${esc(x.lv)} · ${esc(JTYS[x.ty]||x.ty)}</b><div class="jnote">${x.n} questions · ${new Date(x.date).toLocaleString()}</div></div><div><button class="chip" data-jsopen="${esc(x.id)}">Practice</button><button class="chip" data-jsdel="${esc(x.id)}">✕</button></div></div>`).join(''):`<p>No saved sets yet. Generate a question set online; it will be saved automatically for offline practice.</p>`}</div><div class="jacts"><button class="chip" data-jv="1">Back</button></div></div>`;setTimeout(jFilterSets,0);$('#jss')?.addEventListener('input',jFilterSets);$('#jfilter')?.addEventListener('change',jFilterSets);return}
+
   if(J.load){m.innerHTML=`<div class="empty"><div class="spin" aria-hidden="true"></div><p style="font-weight:600">${esc(J.step)}</p><p class="jnote"><span id="jclk">${Math.round((Date.now()-(J.t0||Date.now()))/1000)} s</span> elapsed — a slow model can take a couple of minutes</p>${P.ai.strict!==false?`<p class="jnote">Strict check on — every question is re-answered independently before you see it.</p>`:''}<button class="chip" data-jstop="1">Stop</button></div>`;
     if(!S.jtm)S.jtm=setInterval(()=>{const c=document.getElementById('jclk');if(!c){clearInterval(S.jtm);S.jtm=null;return}c.textContent=Math.round((Date.now()-(J.t0||Date.now()))/1000)+' s'},1000);
     return}
@@ -653,9 +655,9 @@ function jMain(){
     m.innerHTML=`<div class="empty"><h2>${acc>=80?'🎉 Great work!':'💪 Nice effort!'}</h2><p>${d.n} questions · ${acc}% correct · +${d.xp||0} XP</p><p class="jnote">Missed questions went to your review list.</p><div class="jacts"><button class="btn b1" data-jgen>New set</button>${P.jlpt.rev.length?`<button class="chip" data-jv="1">Review (${P.jlpt.rev.length})</button>`:''}</div></div>`;return}
   const it=J.q[J.pos];
   if(!it){
-    m.innerHTML=`<div class="empty"><h2>JLPT practice · ${lv}</h2><p>${JTYS[ty]} — written by your own AI, checked against the ${lv} kanji set${P.ai.strict!==false?', then re-answered independently before you see them':''}.</p><button class="btn b1" data-jgen>Generate ${P.jlpt.n} questions</button><p class="jnote">AI-generated JLPT-style practice — never real past exam questions.${JLPT_BANK.length?` ${JLPT_BANK.filter(b=>b.lv===lv&&b.ty===ty).length} pre-validated questions are included.`:''}</p></div>`;return}
+    m.innerHTML=`<div class="empty"><h2>JLPT practice · ${lv}</h2><p>${JTYS[ty]} — written by your own AI, checked against the ${lv} kanji set${P.ai.strict!==false?', then re-answered independently before you see them':''}.</p><button class="btn b1" data-jgen>Generate ${P.jlpt.n} questions</button><button class="chip" data-jsaved>📚 Saved sets (${(P.jlpt.savedSets||[]).length}) · Offline</button><p class="jnote">AI-generated JLPT-style practice — never real past exam questions.${JLPT_BANK.length?` ${JLPT_BANK.filter(b=>b.lv===lv&&b.ty===ty).length} pre-validated questions are included.`:''}</p></div>`;return}
   const pr=J.pos/J.q.length*100;
-  let h=`<div class="bar" style="margin-top:12px" role="progressbar" aria-label="Set progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pr)}"><i style="width:${pr}%"></i></div><div class="panel jq"><p class="jqsub">${lv} · ${JTYS[ty]} · ${J.pos+1} of ${J.q.length}</p><div class="jqt" lang="ja">${esc(it.q)}</div><div class="opts">`;
+  let h=`${J.mock?`<div class="jnote" style="text-align:center">⏱ Mock test · <b id="jmockclock">${Math.floor(Math.max(0,J.mock.end-Date.now())/60000)}:${String(Math.floor(Math.max(0,J.mock.end-Date.now())/1000)%60).padStart(2,'0')}</b></div>`:''}<div class="bar" style="margin-top:12px" role="progressbar" aria-label="Set progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pr)}"><i style="width:${pr}%"></i></div><div class="panel jq"><p class="jqsub">${lv} · ${JTYS[ty]} · ${J.pos+1} of ${J.q.length}</p><div class="jqt" lang="ja">${esc(it.q)}</div><div class="opts">`;
   h+=it.opts.map((o,k)=>{let cl='';
     if(J.ans!=null){if(k===it.a)cl=' ok';else if(k===J.ans)cl=' no'}
     return `<button class="opt${cl}" data-jo="${k}"${lgAttr(o)}${J.ans!=null?' disabled':''}>${esc(o)}</button>`}).join('');
@@ -668,6 +670,11 @@ function jMain(){
   h+=`</div>`;
   m.innerHTML=h;
 }
+function jBackup(){const data={app:'Tango Learning JLPT backup',version:1,exported:new Date().toISOString(),jlpt:P.jlpt,xp:P.xp};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='tango-jlpt-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(a.href);pop('Backup downloaded')}
+function jProgress(){J.view='progress';renderJ()}
+function jMock(){const ss=P.jlpt.savedSets||[];if(!ss.length){pop('Generate/save a set first');return}const set=ss[0];J.q=set.items.map(x=>({...x}));J.pos=0;J.ans=null;J.done=null;J.sok=0;J.xp0=P.xp;J.savedId=set.id;J.mock={start:Date.now(),seconds:J.q.length*60,end:Date.now()+J.q.length*60000};if(J.mockTimer)clearInterval(J.mockTimer);J.mockTimer=setInterval(()=>{if(!J.mock)return;const left=Math.max(0,Math.ceil((J.mock.end-Date.now())/1000));const el=document.getElementById('jmockclock');if(el)el.textContent=Math.floor(left/60)+':'+String(left%60).padStart(2,'0');if(left===0){clearInterval(J.mockTimer);J.mockTimer=null;J.mock=null;pop('Mock test time ended');J.view='done';J.done={n:J.pos,ok:J.sok||0,xp:0};J.q=[];renderJ()}},1000);J.view='set';renderJ();}
+function jRenderProgress(m){const l=P.jlpt.log||{a:0,ok:0};const pct=l.a?Math.round(l.ok/l.a*100):0;const by=(P.jlpt.levelStats||{});m.innerHTML=`<div class="empty"><h2>📈 JLPT Progress</h2><p>Total answered: <b>${l.a||0}</b> · Correct: <b>${l.ok||0}</b> · Accuracy: <b>${pct}%</b></p><div class="bar"><i style="width:${pct}%"></i></div><h3>Level performance</h3>${['N5','N4','N3','N2','N1'].map(x=>{let z=by[x]||{a:0,ok:0},p=z.a?Math.round(z.ok/z.a*100):0;return `<p>${x}: ${z.ok||0}/${z.a||0} (${p}%)</p><div class="bar"><i style="width:${p}%"></i></div>`}).join('')}<p>Wrong answers saved: ${P.jlpt.rev.length}</p><button class="chip" data-jv>Back</button></div>`}
+function jFilterSets(){const q=($('#jss')?.value||'').toLowerCase(),lv=$('#jfilter')?.value||'all';document.querySelectorAll('#jsetlist [data-setrow]').forEach(r=>r.hidden=!(r.textContent.toLowerCase().includes(q)&&(lv==='all'||r.dataset.level===lv)))}
 function renderJ(){
   $('#jty').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.jt===P.jlpt.ty));
   $('#jcnt').value=String(P.jlpt.n);
@@ -679,6 +686,7 @@ function renderJ(){
   $('#jb').style.width=prp+'%';$('#jb').parentElement.setAttribute('aria-valuenow',Math.round(prp));
   jMain();
 }
+$('#jimportfile').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());const jl=d.jlpt||d;if(!jl.savedSets)throw new Error('Backup format not recognized');if(!confirm('Restore backup? This replaces JLPT saved sets and progress.'))return;P.jlpt=Object.assign(P.jlpt,jl);P.xp=d.xp??P.xp;save();renderJ();pop('Backup restored')}catch(err){alert('Could not restore: '+err.message)}finally{e.target.value=''}});
 /* AI connection sheet */
 function openAISet(){$('#au').value=P.ai.url||'';$('#am').value=P.ai.model||'';$('#ak').value=P.ai.key||'';$('#astr').checked=P.ai.strict!==false;$('#aerr').textContent='';$('#aov').hidden=false;setTimeout(()=>$('#au').focus(),60)}
 function closeAISet(){$('#aov').hidden=true;$('#jai').focus()}
@@ -708,7 +716,15 @@ document.addEventListener('click',e=>{
   if(t.dataset.area){S.area='jlpt';P.pref.area='jlpt';save();return render()}
   if(t.dataset.jl){P.jlpt.lv=t.dataset.jl;J.view='set';J.q=[];J.pos=0;J.ans=null;save();return renderJ()}
   if(t.dataset.jt){P.jlpt.ty=t.dataset.jt;J.view='set';J.q=[];J.pos=0;J.ans=null;save();return renderJ()}
+  if(t.dataset.jbackup!==undefined){jBackup();return}
+  if(t.dataset.jimport!==undefined){$('#jimportfile').click();return}
+  if(t.dataset.jprogress!==undefined){jProgress();return}
+  if(t.dataset.jmock!==undefined){jMock();return}
+  if(t.dataset.jvreview!==undefined){J.view='rev';return renderJ()}
   if(t.dataset.jgen!==undefined){jGen();return}
+  if(t.dataset.jsaved!==undefined){J.view='saved';J.q=[];return renderJ()}
+  if(t.dataset.jsopen){const ss=(P.jlpt.savedSets||[]).find(x=>x.id===t.dataset.jsopen);if(ss){P.jlpt.lv=ss.lv;P.jlpt.ty=ss.ty;J.q=ss.items.map(x=>({...x}));J.pos=0;J.ans=null;J.done=null;J.sok=0;J.xp0=P.xp;J.view='set';J.savedId=ss.id;renderJ()}return}
+  if(t.dataset.jsdel){P.jlpt.savedSets=(P.jlpt.savedSets||[]).filter(x=>x.id!==t.dataset.jsdel);save();renderJ();return}
   if(t.dataset.jstop!==undefined){J.gen++;J.load=false;J.err='';J.view='set';J.q=[];J.pos=0;renderJ();return}
   if(t.dataset.jv){J.view=J.view==='rev'?'set':'rev';J.q=[];J.pos=0;J.ans=null;return renderJ()}
   if(t.dataset.jo!==undefined){jAnswer(+t.dataset.jo);return}
